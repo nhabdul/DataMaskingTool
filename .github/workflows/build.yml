@@ -1,0 +1,42 @@
+name: Build Standalone Executable
+
+on:
+  workflow_dispatch:  # Allows manual trigger
+  push:
+    branches: [ main ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pandas==2.2.3 streamlit==1.29.0 openpyxl==3.1.2 pyarrow==14.0.1
+        pip install pyinstaller
+    
+    - name: Build executable with PyInstaller
+      run: |
+        pyinstaller --name=DataMaskingTool --onefile --windowed --add-data "data_masking_tool.py;." --hidden-import=streamlit --hidden-import=streamlit.web.cli --hidden-import=streamlit.runtime.scriptrunner.magic_funcs --hidden-import=pandas --hidden-import=openpyxl --hidden-import=pyarrow --collect-all=streamlit --copy-metadata=streamlit --copy-metadata=pandas launcher.py
+    
+    - name: Upload executable
+      uses: actions/upload-artifact@v3
+      with:
+        name: DataMaskingTool-Windows
+        path: dist/DataMaskingTool.exe
+        retention-days: 30
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: dist/DataMaskingTool.exe
