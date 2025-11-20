@@ -5,6 +5,7 @@ import socket
 import time
 import webbrowser
 from threading import Timer
+import multiprocessing
 
 def find_free_port():
     """Find a free port to run Streamlit on."""
@@ -16,38 +17,46 @@ def find_free_port():
 
 def open_browser(port):
     """Open browser after a delay."""
-    time.sleep(3)
+    time.sleep(5)
     webbrowser.open(f'http://localhost:{port}')
 
 def main():
+    # CRITICAL: Prevent multiprocessing issues with frozen executables
+    multiprocessing.freeze_support()
+    
     # Get the directory where files are located
     if getattr(sys, 'frozen', False):
-        # Running as compiled executable - PyInstaller extracts to _MEIPASS
         application_path = sys._MEIPASS
     else:
-        # Running as script
         application_path = os.path.dirname(os.path.abspath(__file__))
     
-    # Path to the main app
     script_path = os.path.join(application_path, 'data_masking_tool.py')
     
-    # Find a free port
+    # Check if file exists
+    if not os.path.exists(script_path):
+        print(f"ERROR: Cannot find {script_path}")
+        input("Press Enter to exit...")
+        return
+    
     port = find_free_port()
     
     print("=" * 60)
     print("  DATA MASKING TOOL")
     print("=" * 60)
-    print(f"\nStarting application on port {port}...")
-    print(f"Opening browser to http://localhost:{port}")
-    print("\nKEEP THIS WINDOW OPEN while using the app")
+    print(f"\nStarting on http://localhost:{port}")
+    print("\nKEEP THIS WINDOW OPEN")
+    print("Browser will open in 5 seconds...")
     print("Press Ctrl+C to stop\n")
     print("=" * 60)
     
-    # Open browser in background
-    Timer(3, open_browser, args=[port]).start()
+    # Open browser once
+    Timer(5, open_browser, args=[port]).start()
     
-    # Run Streamlit using Python's subprocess
     try:
+        # Create a new environment to prevent issues
+        env = os.environ.copy()
+        env['STREAMLIT_BROWSER_GATHER_USAGE_STATS'] = 'false'
+        
         streamlit_cmd = [
             sys.executable,
             "-m",
@@ -56,16 +65,19 @@ def main():
             script_path,
             f"--server.port={port}",
             "--server.headless=true",
+            "--server.enableCORS=false",
+            "--server.enableXsrfProtection=false",
+            "--browser.serverAddress=localhost",
+            f"--browser.serverPort={port}",
             "--browser.gatherUsageStats=false"
         ]
         
-        subprocess.run(streamlit_cmd)
+        subprocess.run(streamlit_cmd, env=env, check=True)
+        
     except KeyboardInterrupt:
-        print("\n\nApplication stopped by user.")
+        print("\n\nStopped by user.")
     except Exception as e:
         print(f"\nError: {e}")
-        print(f"Script path: {script_path}")
-        print(f"Application path: {application_path}")
         input("\nPress Enter to exit...")
 
 if __name__ == "__main__":
